@@ -1,10 +1,6 @@
 import requests
 import json
 
-from PyQt5.QtNetwork.QUdpSocket import sender
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session
-
 from entities.payment_information import PaymentInformation
 from entities.payment_status import PaymentFailure, PaymentSuccess
 

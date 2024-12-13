@@ -1,39 +1,49 @@
+import logging
 import requests
 import json
 
 from entities.payment_information import PaymentInformation
 from entities.payment_status import PaymentFailure, PaymentSuccess
 
+from configs.config import get_config
 
 class PaymentService:
     def __init__(self):
-        pass
+        self.logger = logging.getLogger('uvicorn.error')
+        self.global_config = get_config()
 
-    def completePayment(self, payment_information: PaymentInformation) -> PaymentSuccess | PaymentFailure:
+    def completePayment(self, payment_information: PaymentInformation, token: str) -> PaymentSuccess | PaymentFailure:
+        self.logger.debug(f"Payment Information: {payment_information}")
+
+        headers = {'Authorization': f"Bearer {token}", 'Content-Type': 'application/json'}
+
         if payment_information is None:
-            return PaymentFailure(status='1', reason='Нет информации о платеже')
+            self.logger.error("Payment information cannot be None")
+            return PaymentFailure(status='404', reason='Нет информации о платеже')
 
         if payment_information.cvv is None and payment_information.amount > 1500:
-            return PaymentFailure(status='2', reason='Ошибка авторизации платежа. Отсутствует CVV код')
+            self.logger.error("Payment information cannot be None")
+            return PaymentFailure(status='404', reason='Ошибка авторизации платежа. Отсутствует CVV код')
 
-        api_url = 'card_service_url'
-
-        checkIfSenderExists = requests.get(f'{api_url}/check', params={
+        checkIfSenderExists = requests.get(f'{self.global_config["card_service_url"]}/card/check', params={
             'cardNumber': payment_information.senderCardNumber,
             'accountNumber': payment_information.senderAccountNumber
-        })
+        }, headers=headers)
 
         checkIfSenderExists = checkIfSenderExists.json()
 
-        checkIfReceiverExists = requests.get(f'{api_url}/check', params={
+        checkIfReceiverExists = requests.get(f'{self.global_config["card_service_url"]}/card/check', params={
             'cardNumber': payment_information.receiverCardNumber,
             'accountNumber': payment_information.receiverAccountNumber
-        })
+        }, headers=headers)
 
         checkIfReceiverExists = checkIfReceiverExists.json()
 
-        if not checkIfSenderExists.cardExists and checkIfReceiverExists.cardExists:
-            return PaymentFailure(status='2', reason='Ошибка платежа. Одного из клиентов не существует в системе')
+        self.logger.debug(f"CheckIfSenderExists: {checkIfSenderExists}")
+        self.logger.debug(f"CheckIfReceiverExists: {checkIfReceiverExists}")
+
+        if not checkIfSenderExists.get('cardExists') and not checkIfReceiverExists.get('cardExists'):
+            return PaymentFailure(status='404', reason='Ошибка платежа. Одного из клиентов не существует в системе')
 
         # Проверка CVV
 
@@ -43,28 +53,33 @@ class PaymentService:
             'cardNumber': payment_information.senderCardNumber
         }
 
-        senderBalanceUpdate = {
+        receiverBalanceUpdate = {
             'balanceChange': payment_information.amount,
             'accountNumber': payment_information.receiverAccountNumber,
             'cardNumber': payment_information.receiverCardNumber
         }
 
-        senderStatus = requests.post(f'{api_url}/balance/update', data=json.dumps(senderBalanceUpdate))
+        senderStatus = requests.post(f'{self.global_config["card_service_url"]}/card/balance/update', data=json.dumps(senderBalanceUpdate), headers=headers)
         senderStatus = senderStatus.json()
 
-        if senderStatus.status != '0':
-            return PaymentFailure(status=senderStatus.status, reason=senderStatus.errorDescription)
+        self.logger.debug(f'senderStatus: {senderStatus}')
 
-        receiverStatus = requests.post(f'{api_url}/balance/update', data=json.dumps(senderBalanceUpdate))
+        if senderStatus.get('status') != 200:
+            self.logger.error('Balance cannot be updated!')
+            return PaymentFailure(status='500', reason=senderStatus.get('description'))
+
+        receiverStatus = requests.post(f'{self.global_config["card_service_url"]}/card/balance/update', data=json.dumps(receiverBalanceUpdate), headers=headers)
         receiverStatus = receiverStatus.json()
 
-        if receiverStatus.status != '0':
-            senderBalanceUpdate['balanceChange'] = payment_information.amount
-            senderStatus = requests.post(f'{api_url}/balance/update', data=json.dumps(senderBalanceUpdate))
-            return PaymentFailure(status=receiverStatus.status, reason=receiverStatus.errorDescription)
+        self.logger.debug(f'receiverStatus: {receiverStatus}')
+
+        if receiverStatus.get('status') != 200:
+            self.logger.error('Balance cannot be updated!')
+            senderStatus = requests.post(f'{self.global_config["card_service_url"]}/card/balance/update', data=json.dumps(receiverBalanceUpdate), headers=headers)
+            return PaymentFailure(status='500', reason=receiverStatus.get('description'))
 
         # Внести в БД операцию
 
-        return PaymentSuccess(status='0')
+        return PaymentSuccess(status='200')
 
 

@@ -3,3 +3,5 @@ uvicorn
 requests~=2.31.0
 sqlalchemy~=1.4.39
 pydantic~=1.10.8
+py_eureka_client
+python-keycloak

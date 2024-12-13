@@ -2,7 +2,6 @@ from pydantic import BaseModel
 
 
 class PaymentInformation(BaseModel):
-    id: str
     senderCardNumber: str
     senderAccountNumber: str | None = None
     amount: int

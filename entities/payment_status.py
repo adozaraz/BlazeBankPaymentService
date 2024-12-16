@@ -1,10 +1,6 @@
 from pydantic import BaseModel
 
 
-class PaymentSuccess(BaseModel):
+class PaymentInformationStatus(BaseModel):
     status: str
-
-
-class PaymentFailure(BaseModel):
-    status: str
-    reason: str
+    description: str

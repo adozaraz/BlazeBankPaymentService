@@ -5,3 +5,5 @@ sqlalchemy~=1.4.39
 pydantic~=1.10.8
 py_eureka_client
 python-keycloak
+confluent-kafka~=2.6.1
+nest-asyncio~=1.5.6
